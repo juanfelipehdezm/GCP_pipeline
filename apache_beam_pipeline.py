@@ -1,5 +1,6 @@
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions, StandardOptions
+from apache_beam.runners.runner import PipelineState
 import argparse
 import re
 from google.cloud import bigquery
@@ -29,6 +30,9 @@ path_args, pipeline_args = parse_terminmal_argument()
 inputs_pattern = path_args.input
 options = PipelineOptions(pipeline_args)
 
+
+"""--------------------------------------------------"""
+"""beam pipeline"""
 #initialize the beam object
 beam_pipeline = beam.Pipeline(options=options)
 
@@ -55,6 +59,27 @@ def remove_special_characters(row):
         clean_str = clean_str + cleaned_col + ","
 
     return clean_str[:-1]
+
+"""
+passes collection from csv to json
+"""
+def to_json(csv_str):
+    fields = csv_str.split(",")
+    
+    json_str = {"customer_id":fields[0],
+                 "date": fields[1],
+                 "timestamp": fields[2],
+                 "order_id": fields[3],
+                 "items": fields[4],
+                 "amount": fields[5],
+                 "mode": fields[6],
+                 "restaurant": fields[7],
+                 "status": fields[8],
+                 "ratings": fields[9],
+                 "feedback": fields[10],
+                 "new_col": fields[11]
+                 }
+    return json_str
 
 
 #collection to store clean data
@@ -105,4 +130,86 @@ other_orders = (
     |"total map" >> beam.Map(lambda x: "total count :" + str(x))
     |"print total" >> beam.Map(lambda row: print(row)) 
 )
+
+"""
+biquery part to crate the data set 
+"""
+#we do not use service key this time, because we are gg execute the code from cloud shell 
+client = bigquery.Client()
+
+#we define the name we wanna ugive to the dataset 
+dataset_food_daily_to_create = "coral-sonar-395901.food_order_dataset"
+
+if client.get_dataset(dataset_food_daily_to_create): 
+    print("the dataset already exists")
+else: 
+    dataset = bigquery.Dataset(dataset_food_daily_to_create)
+    dataset.location = "US"
+    dataset.description = 'dataset to store food orders daily'
+
+    dataset_ref = client.create_dataset(dataset,timeout = 30)
+
+
+#we can create tha tables using the usual bugquery api or also beam
+#for porpuses of this exersice lets use the beam api
+"""
+tables creating using beam
+"""
+delivered_table = "coral-sonar-395901.food_order_dataset.delivered_orders"
+
+others_table = "coral-sonar-395901.food_order_dataset.other_status_orders"
+
+
+
+table_schema = """customer_id:STRING,
+                  date:STRING,
+                  timestamp:STRING,
+                  order_id:STRING,
+                  items:STRING,
+                  amount:STRING,
+                  mode:STRING,
+                  restaurant:STRING,
+                  status:STRING,
+                  ratings:STRING,
+                  feedback:STRING,
+                  new_col:STRING"""
+
+#cration of delivered orders
+(
+    delivered_orders
+    |"delivered to json" >> beam.Map(to_json) #we pass the collection to json cause it is the only format this method uses
+    |"write delivered orders" >> beam.io.WriteToBigQuery(
+        delivered_table,
+        schema = table_schema,
+        create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED, #if the table does not exists, create it
+        write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,#will load data appending
+        additional_bq_parameters={
+            "timePartitioning": {"type": "DAY"}
+        }
+
+    )
+)
+
+#cration of non delivered orders
+(
+    other_orders
+    |"other orders to json" >> beam.Map(to_json) #we pass the collection to json cause it is the only format this method uses
+    |"write other orders orders" >> beam.io.WriteToBigQuery(
+        others_table,
+        schema = table_schema,
+        create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED, #if the table does not exists, create it
+        write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,#will load data appending
+        additional_bq_parameters={
+            "timePartitioning": {"type": "DAY"}
+        }
+
+    )
+)
+
+"""
+check the state of the execution
+"""
+response = beam_pipeline.run()
+if response.state == PipelineState.DONE:print("Success!!!")
+else:print("Error running beam pipeline")
 
