@@ -112,23 +112,23 @@ other_orders = (
 
 (
     cleaned_data
-    |"count total" >> beam.combiners.Count.Globally() #counts all the records on the collection
-    |"total map" >> beam.Map(lambda x: "total count :" + str(x))
-    |"print total" >> beam.Map(lambda row: print(row)) 
+    |"count total cleaned" >> beam.combiners.Count.Globally() #counts all the records on the collection
+    |"total map cleaned" >> beam.Map(lambda x: "total count :" + str(x))
+    |"print total cleaned" >> beam.Map(lambda row: print(row)) 
 )
 
 (
     delivered_orders
-    |"count total" >> beam.combiners.Count.Globally() #counts all the records on the collection
-    |"total map" >> beam.Map(lambda x: "total count :" + str(x))
-    |"print total" >> beam.Map(lambda row: print(row)) 
+    |"count total delivered" >> beam.combiners.Count.Globally() #counts all the records on the collection
+    |"total map delivered" >> beam.Map(lambda x: "total count :" + str(x))
+    |"print total delivered" >> beam.Map(lambda row: print(row)) 
 )
 
 (
     other_orders
-    |"count total" >> beam.combiners.Count.Globally() #counts all the records on the collection
-    |"total map" >> beam.Map(lambda x: "total count :" + str(x))
-    |"print total" >> beam.Map(lambda row: print(row)) 
+    |"count total other" >> beam.combiners.Count.Globally() #counts all the records on the collection
+    |"total map other" >> beam.Map(lambda x: "total count :" + str(x))
+    |"print total other" >> beam.Map(lambda row: print(row)) 
 )
 
 """
@@ -140,15 +140,15 @@ client = bigquery.Client()
 #we define the name we wanna ugive to the dataset 
 dataset_food_daily_to_create = "coral-sonar-395901.food_order_dataset"
 
-if client.get_dataset(dataset_food_daily_to_create): 
-    print("the dataset already exists")
-else: 
+try:
+    client.get_dataset(dataset_food_daily_to_create)
+    print("The dataset already exists")
+except Exception as e:
     dataset = bigquery.Dataset(dataset_food_daily_to_create)
     dataset.location = "US"
-    dataset.description = 'dataset to store food orders daily'
+    dataset.description = "dataset to store food orders daily"
 
-    dataset_ref = client.create_dataset(dataset,timeout = 30)
-
+    dataset_ref = client.create_dataset(dataset, timeout=30)
 
 #we can create tha tables using the usual bugquery api or also beam
 #for porpuses of this exersice lets use the beam api
